@@ -121,24 +121,26 @@ class RAFT(nn.Module):
         flow_predictions = []
         for itr in range(iters):
             coords1 = coords1.detach()
-            corr = corr_fn(coords1) # index correlation volume
+            corr = corr_fn(coords1)  # index correlation volume
 
             flow = coords1 - coords0
             with autocast(enabled=self.args.mixed_precision):
                 net, up_mask, delta_flow = self.update_block(net, inp, corr, flow)
 
             # F(t+1) = F(t) + \Delta(t)
-            coords1 = coords1 + delta_flow
+            coords1 += delta_flow
 
-            # upsample predictions
-            if up_mask is None:
-                flow_up = upflow8(coords1 - coords0)
-            else:
-                flow_up = self.upsample_flow(coords1 - coords0, up_mask)
+            if not test_mode:
+                # upsample predictions
+                if up_mask is None:
+                    flow_up = upflow8(coords1 - coords0)
+                else:
+                    flow_up = self.upsample_flow(coords1 - coords0, up_mask)
             
-            flow_predictions.append(flow_up)
+                flow_predictions.append(flow_up)
 
         if test_mode:
+            flow_up = self.upsample_flow(coords1 - coords0, up_mask)
             return coords1 - coords0, flow_up
             
         return flow_predictions

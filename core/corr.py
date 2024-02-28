@@ -26,21 +26,27 @@ class CorrBlock:
             corr = F.avg_pool2d(corr, 2, stride=2)
             self.corr_pyramid.append(corr)
 
-    def __call__(self, coords):
         r = self.radius
+        self.dx = torch.linspace(-r, r, 2 * r + 1, device="cuda")
+        self.dy = torch.linspace(-r, r, 2 * r + 1, device="cuda")
+        self.delta = torch.stack(torch.meshgrid(self.dy, self.dx), axis=-1)
+        self.delta_lvl = self.delta.view(1, 2 * r + 1, 2 * r + 1, 2)
+
+    def __call__(self, coords):
+        # r = self.radius
         coords = coords.permute(0, 2, 3, 1)
         batch, h1, w1, _ = coords.shape
+        # dx = torch.linspace(-r, r, 2 * r + 1, device=coords.device)
+        # dy = torch.linspace(-r, r, 2 * r + 1, device=coords.device)
+        # delta = torch.stack(torch.meshgrid(dy, dx), axis=-1)
+        # delta_lvl = delta.view(1, 2 * r + 1, 2 * r + 1, 2)
 
         out_pyramid = []
         for i in range(self.num_levels):
             corr = self.corr_pyramid[i]
-            dx = torch.linspace(-r, r, 2*r+1, device=coords.device)
-            dy = torch.linspace(-r, r, 2*r+1, device=coords.device)
-            delta = torch.stack(torch.meshgrid(dy, dx), axis=-1)
 
             centroid_lvl = coords.reshape(batch*h1*w1, 1, 1, 2) / 2**i
-            delta_lvl = delta.view(1, 2*r+1, 2*r+1, 2)
-            coords_lvl = centroid_lvl + delta_lvl
+            coords_lvl = centroid_lvl + self.delta_lvl
 
             corr = bilinear_sampler(corr, coords_lvl)
             corr = corr.view(batch, h1, w1, -1)
@@ -57,7 +63,7 @@ class CorrBlock:
         
         corr = torch.matmul(fmap1.transpose(1,2), fmap2)
         corr = corr.view(batch, ht, wd, 1, ht, wd)
-        return corr  / torch.sqrt(torch.tensor(dim).float())
+        return corr / torch.sqrt(torch.tensor(dim).float())
 
 
 class AlternateCorrBlock:
